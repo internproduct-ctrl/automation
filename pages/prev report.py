@@ -16,6 +16,7 @@ from theme import inject, page_header, metric_cards, count_pill
 st.set_page_config(
     page_title="Duplicate Detection System",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 inject()
 

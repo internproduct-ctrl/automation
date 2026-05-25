@@ -9,7 +9,7 @@ from openpyxl.styles import PatternFill
 from datetime import datetime
 import time
 
-st.set_page_config(page_title="Pre Dedup", page_icon="📋", layout="wide")
+st.set_page_config(page_title="Pre Dedup", page_icon="📋", layout="wide", initial_sidebar_state="collapsed")
 inject()
 
 def get_manager_column(df, base):

@@ -9,7 +9,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from theme import inject, page_header, metric_cards, style_table
 
-st.set_page_config(page_title="Dedup Analyser", layout="wide")
+st.set_page_config(page_title="Dedup Analyser", layout="wide", initial_sidebar_state="collapsed")
 inject()
 
 page_header("DEDUP ANALYSER", "Biometric Cross-Match Intelligence")

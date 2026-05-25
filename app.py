@@ -7,26 +7,23 @@ st.set_page_config(
     page_title="Automation Hub",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 inject()
 
-# ── SIDEBAR LOGO ──────────────────────────────────────────────────────────────
-with st.sidebar:
+# ── TOP BAR ────────────────────────────────────────────────────────────────────
+c1, c2, c3 = st.columns([1, 6, 1])
+with c1:
     st.markdown("""
-    <div style="padding:20px 8px 8px;">
-        <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;
-                    font-size:1.1rem;color:#c9d6e8;letter-spacing:-0.5px;">
-            ⚡ AUTOMATION HUB
-        </div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.62rem;
-                    letter-spacing:2px;color:#3d5070;margin-top:4px;text-transform:uppercase;">
-            Report Intelligence Suite
-        </div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;
+                font-size:1rem;color:var(--navy);letter-spacing:-0.5px;
+                padding-top:4px;">
+        ⚡ AUTOMATION HUB
     </div>
     """, unsafe_allow_html=True)
-    st.markdown("<hr>", unsafe_allow_html=True)
+with c3:
     theme_selector()
+st.markdown("<hr style='margin:0 0 0 0;opacity:0.3;'>", unsafe_allow_html=True)
 
 # ── HERO ──────────────────────────────────────────────────────────────────────
 st.markdown("""
