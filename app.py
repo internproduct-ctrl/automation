@@ -1,7 +1,7 @@
 import streamlit as st
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
-from theme import inject, page_header
+from theme import inject, page_header, theme_selector
 
 st.set_page_config(
     page_title="Automation Hub",
@@ -14,7 +14,7 @@ inject()
 # ── SIDEBAR LOGO ──────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="padding:20px 8px 28px;">
+    <div style="padding:20px 8px 8px;">
         <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;
                     font-size:1.1rem;color:#c9d6e8;letter-spacing:-0.5px;">
             ⚡ AUTOMATION HUB
@@ -25,6 +25,8 @@ with st.sidebar:
         </div>
     </div>
     """, unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    theme_selector()
 
 # ── HERO ──────────────────────────────────────────────────────────────────────
 st.markdown("""

@@ -8,134 +8,16 @@ import pandas as pd
 import streamlit as st
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from theme import inject, page_header, metric_cards, count_pill
 
 # ── PAGE CONFIG ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Duplicate Detection System",
     layout="wide",
 )
-
-# ── CUSTOM CSS ────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
-
-html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
-.stApp { background: #f5f1eb;   /* warm beige */
-    color: #1f2937;; }
-h1, h2, h3 { font-family: 'IBM Plex Mono', monospace; }
-
-.metric-card {
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 18px 22px;
-    text-align: center;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    transition: all 0.2s ease;
-}
-            .metric-card.total {
-    border-top: 4px solid #1e3a8a;
-}
-
-.metric-card.imp {
-    border-top: 4px solid #dc2626;
-    background: #fef2f2;
-}
-
-.metric-card.same {
-    border-top: 4px solid #2563eb;
-    background: #eff6ff;
-}
-
-.metric-card.twin {
-    border-top: 4px solid #d97706;
-    background: #fffbeb;
-}
-            .metric-card.imp {
-    border-top: 4px solid #dc2626;
-    background: #fef2f2;
-}
-
-.metric-card.same {
-    border-top: 4px solid #2563eb;
-    background: #eff6ff;
-}
-
-.metric-card.total {
-    border-top: 4px solid #1e3a8a;
-}
-
-.metric-card.sib {
-    border-top: 4px solid #16a34a;
-    background: #f0fdf4;
-}
-
-.metric-card.dup {
-    border-top: 4px solid #dc2626;
-    background: #fef2f2;
-}
-
-.metric-card.new {
-    border-top: 4px solid #15803d;
-    background: #ecfdf5;
-}
-
-.metric-card.old {
-    border-top: 4px solid #334155;
-    background: #f8fafc;
-}
-.metric-value {
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: #1f2937;
-}
-
-.metric-label {
-    font-size: 0.7rem;
-    letter-spacing: 3px;
-    color: #6b7280;
-}
-.stButton button {
-    background: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 10px;
-    padding: 10px;
-    font-weight: 500;
-}
-.metric-label {
-    font-size: 11px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: #64748b;
-    font-family: 'IBM Plex Mono', monospace;
-}
-.metric-value {
-    font-size: 28px;
-    font-weight: 600;
-    font-family: 'IBM Plex Mono', monospace;
-    margin-top: 4px;
-}
-.refresh-badge {
-    display: inline-block;
-    background: #1e2130;
-    border: 1px solid #2d3348;
-    border-radius: 20px;
-    padding: 4px 14px;
-    font-size: 11px;
-    font-family: 'IBM Plex Mono', monospace;
-    color: #64748b;
-    letter-spacing: 1px;
-}
-div[data-testid="stSelectbox"] label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: #64748b !important;
-}
-</style>
-""", unsafe_allow_html=True)
+inject()
 
 # ── SESSION STATE INIT ────────────────────────────────────────────────────────
 if "seen_keys"      not in st.session_state:
@@ -491,16 +373,7 @@ if df is not None and not df.empty:
     old_count = (df["Record Status"] == "⚪ OLD").sum()
 
     # ── REFRESH INFO BAR ──────────────────────────────────────────────────────
-    st.markdown(
-        f'<div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;">'
-        f'<span class="refresh-badge">REFRESH #{rc}</span>'
-        f'<span style="font-family:IBM Plex Mono,monospace;font-size:12px;color:#22c55e;">'
-        f'🟢 {new_count} NEW</span>'
-        f'<span style="font-family:IBM Plex Mono,monospace;font-size:12px;color:#94a3b8;">'
-        f'⚪ {old_count} OLD</span>'
-        f'</div>',
-        unsafe_allow_html=True
-    )
+    count_pill(f"REFRESH #{rc}  ·  🟢 {new_count} NEW  ·  ⚪ {old_count} OLD")
 
     # ── METRICS ───────────────────────────────────────────────────────────────
     total         = len(df)
@@ -509,23 +382,13 @@ if df is not None and not df.empty:
     ignored       = df["Status"].str.startswith("IGNORED").sum()
     invalid       = df["Status"].str.startswith("INVALID").sum()
 
-    m1, m2, m3, m4, m5 = st.columns(5)
-    for col, label, val, color,cls  in [
-        (m1, "TOTAL", total, "#1e3a8a", "total"),
-        (m2, "IMPERSONATION", impersonation, "#dc2626", "imp"),
-        (m3, "SAME DETAILS", same_details, "#2563eb", "same"),
-        (m4, "INVALID", invalid, "#d97706", "twin"),
-        (m5, "IGNORED", ignored, "#6b7280", "old"),
-    ]:
-        with col:
-            st.markdown(f"""
-            <div class="metric-card {cls}">
-                <div class="metric-label">{label}</div>
-                <div class="metric-value" style="color:{color}">{val}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    metric_cards([
+        ("mc-total", total, "Total"),
+        ("mc-imp", impersonation, "Impersonation"),
+        ("mc-same", same_details, "Same Details"),
+        ("mc-sib", invalid, "Invalid"),
+        ("mc-imp", ignored, "Ignored"),
+    ])
 
     # ── FILTERS ───────────────────────────────────────────────────────────────
     f1, f2, f3, f4, f5, f6 = st.columns([2,2,2,1.5,1.5,1.5])
@@ -569,33 +432,7 @@ if df is not None and not df.empty:
     filtered = filtered[filtered["Cross Score"] >= min_cross]
 
     with f4:
-        st.markdown(
-        f"""
-        <div style="
-            margin-top:30px;
-            display:flex;
-            justify-content:flex-end;
-        ">
-            <div style="
-                padding:8px 16px;
-                border-radius:999px;
-                background:#fafaf9;
-                border:1px solid #e7e5e4;
-                font-family:'IBM Plex Mono', monospace;
-                font-size:12px;
-                color:#6b7280;
-                white-space:nowrap;
-            ">
-                Showing 
-                <span style="color:#1f2937;font-weight:600;">{len(filtered)}</span> 
-                of 
-                <span style="color:#1f2937;font-weight:600;">{total}</span> 
-                records
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+        count_pill(f"Showing {len(filtered)} of {total} records")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
