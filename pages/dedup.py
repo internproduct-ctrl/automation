@@ -72,6 +72,21 @@ def fetch_and_tag(url):
 
     for row in rows[1:]:
         p_tags = row.find_all("p")
+        tds = row.find_all("td")
+        app_to_app = 0.0
+
+        try:
+            nums = []
+
+            for td in tds:
+                vals = re.findall(r'\d+\.\d+', td.get_text(" ", strip=True))
+                nums.extend([float(x) for x in vals])
+
+                if len(nums) >= 2:
+                    app_to_app = nums[-2]
+
+        except:
+            pass
         records = [parse_p_text(p.get_text(" ", strip=True)) for p in p_tags]
         records = [r for r in records if r]
 
@@ -103,6 +118,7 @@ def fetch_and_tag(url):
 
                 "Father Match": "✔ Same" if father_same else "✘ Diff",
                 "DOB Match": "✔ Same" if dob_same else "✘ Diff",
+                "App Score": round(app_to_app, 2),
 
                 "Status": status
             }
@@ -186,7 +202,7 @@ if df is not None and not df.empty:
     ])
 
     # ── FILTERS ─────────────────────────
-    f1, f2, f3, f4 = st.columns(4)
+    f1, f2, f3, f4, f5 = st.columns(5)
 
     with f1:
         sel_status = st.selectbox("STATUS", ["ALL", "SAME DETAILS", "TWIN", "SIBLING", "IMPERSONATION"])
@@ -199,6 +215,14 @@ if df is not None and not df.empty:
 
     with f4:
         sel_record = st.selectbox("RECORD", ["ALL", "NEW", "OLD"])
+    with f5:
+        min_app = st.number_input(
+            "MIN APP SCORE",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.0,
+            step=0.01
+        )
 
     filt = df.copy()
 
@@ -213,6 +237,7 @@ if df is not None and not df.empty:
 
     if sel_record != "ALL":
         filt = filt[filt["Record"] == sel_record]
+    filt = filt[filt["App Score"] >= min_app]
 
     # ✅ NEW FEATURE: SHOW COUNT
     filtered_count = len(filt)
@@ -234,7 +259,11 @@ if df is not None and not df.empty:
 
     with tab1:
         st.dataframe(
-            display_df.style.apply(
+            display_df.style
+            .format({
+                "App Score": "{:.2f}"
+                })
+            .apply(
                 style_table,
                 axis=None,
                 name_cols=["Curr Name", "Prev Name"],

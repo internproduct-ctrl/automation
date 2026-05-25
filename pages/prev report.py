@@ -158,6 +158,12 @@ def similarity_score(a, b):
         return 0
     return max(fuzz.ratio(a, b), fuzz.partial_ratio(a, b), fuzz.token_sort_ratio(a, b))
 
+def extract_bio_scores(text):
+
+    nums = re.findall(r'\d+\.\d+', str(text))
+
+    return [float(x) for x in nums]
+
 def classify(score):
     if score >= 90:   return "VERY_HIGH"
     elif score >= 75: return "HIGH"
@@ -209,115 +215,196 @@ def get_current(text):
     return {"name": name, "father": father, "dob": dob}
 
 def get_prev(block):
+
     lines = [l.strip() for l in block.split("\n") if l.strip()]
+
     if not lines:
         return None
+
     first = lines[0]
     parts = first.split("-")
+
     if len(parts) < 4:
         return None
+
     name = clean(parts[2])
-    score_match = re.search(r'(True|False)-([\d\.]+)-([\d\.]+)', first)
+
+    score_match = re.search(
+        r'(True|False)-([\d\.]+)-([\d\.]+)',
+        first
+    )
+
     if not score_match:
         return None
+
     face_score  = float(score_match.group(2))
     cross_score = float(score_match.group(3))
-    last = lines[-1]
-    dob_match = re.search(r'(\d{4}-\d{2}-\d{2})', last)
-    if dob_match:
-        dob    = dob_match.group(1)
-        father = clean(last.replace(dob, ""))
-    else:
-        dob    = ""
-        father = clean(last)
-    return {"name": name, "father": father, "dob": dob,
-            "score": face_score, "cross_score": cross_score}
+
+    father = ""
+    dob = ""
+
+    # Search all lines from bottom
+    for line in reversed(lines):
+
+        dob_match = re.search(r'(\d{4}-\d{2}-\d{2})', line)
+
+        if dob_match:
+            dob = dob_match.group(1)
+
+            possible_father = clean(
+                line.replace(dob, "")
+            ).strip()
+
+            if len(possible_father.split()) >= 2:
+                father = possible_father
+
+            break
+
+    return {
+        "name": name,
+        "father": father,
+        "dob": dob,
+        "score": face_score,
+        "cross_score": cross_score
+    }
 
 def get_status(curr, prev, current_text):
+
     if "duplicate" in current_text.lower():
         return "IGNORED (Duplicate)"
+
     if prev["score"] < 0.5:
         return "IGNORED (Low Score)"
+
     if prev["cross_score"] < 0.67:
         return "IGNORED (Low Cross Score)"
+
     if is_non_person(prev["name"]):
         return "INVALID DATA (Non-person in Prev)"
+
     if is_non_person(curr["name"]):
         return "INVALID DATA (Non-person in Current)"
 
-    name_score   = similarity_score(curr["name"],   prev["name"])
+    name_score   = similarity_score(curr["name"], prev["name"])
     father_score = similarity_score(curr["father"], prev["father"])
-    name_type    = classify(name_score)
-    father_type  = classify(father_score)
 
-    dob_curr    = curr["dob"]
-    dob_prev    = prev["dob"]
+    name_type   = classify(name_score)
+    father_type = classify(father_score)
+
+    dob_curr = curr["dob"]
+    dob_prev = prev["dob"]
+
+
     dob_same    = (dob_curr == dob_prev and dob_curr != "")
     dob_missing = (dob_curr == "" or dob_prev == "")
     dob_diff    = (not dob_same and not dob_missing)
 
-    if name_score < 25:
-        return "INVALID DATA (No Similarity)"
+    # -------------------------
+    # IMPERSONATION
+    # -------------------------
+    if name_score < 25 and father_score < 25:
+        return "IMPERSONATION"
+
     if father_type == "DIFF":
         return "IMPERSONATION"
+
     if father_type == "LOW" and name_type == "VERY_HIGH" and dob_diff:
         return "IMPERSONATION"
+
     if father_type == "LOW" and name_type in ["LOW", "DIFF"] and (dob_missing or dob_diff):
         return "IMPERSONATION"
 
+    # -------------------------
+    # NAME MATCH
+    # -------------------------
     name_exact = name_exact_match(curr["name"], prev["name"], name_score)
-    if father_type in ["VERY_HIGH", "HIGH"] and name_exact:
-        return "SAME DETAILS" if (dob_same or dob_missing) else "SIBLING"
-    if father_type in ["VERY_HIGH", "HIGH"] and name_type in ["LOW", "DIFF"] and dob_same:
-        return "TWIN"
-    if father_type in ["VERY_HIGH", "HIGH"]:
-        return "SIBLING"
-    return "IMPERSONATION"
 
+    # SAME PERSON
+    if father_type in ["VERY_HIGH", "HIGH"] and name_exact:
+        return "SAME DETAILS"
+
+    # TWIN
+    if father_type in ["VERY_HIGH", "HIGH"] and dob_same:
+        if name_type in ["VERY_HIGH", "HIGH"]:
+            return "SIBLING/TWIN"
+
+    # SIBLING
+    if father_type in ["VERY_HIGH", "HIGH"]:
+        return "SIBLING/TWIN"
+
+    return "IMPERSONATION"
 # ── FETCH & TAG ───────────────────────────────────────────────────────────────
 def fetch_and_tag(url: str) -> tuple[pd.DataFrame, str | None]:
-    """
-    Fetch data from URL, compute record keys, tag each row as NEW or OLD
-    based on whether its key was seen in a previous refresh.
-    Newly seen keys are added to session_state.seen_keys after tagging.
-    """
+
     try:
-        html = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15).text
+        html = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15
+        ).text
+
         soup = BeautifulSoup(html, "html.parser")
         rows = soup.find_all("tr")
+
         results = []
 
         for row in rows[1:]:
+
             cols = row.find_all("td")
-            if len(cols) < 4:
+
+            if len(cols) < 5:
                 continue
+
             current_text = cols[2].get_text("\n", strip=True)
             prev_text    = cols[3].get_text("\n", strip=True)
-            curr         = get_current(current_text)
+
+            # REAL BIO SCORE COLUMN
+            bio_score_text = cols[4].get_text(" ", strip=True)
+
+            bio_scores = extract_bio_scores(bio_score_text)
+
+            curr = get_current(current_text)
 
             prev_blocks = re.findall(
                 r'([a-zA-Z]+\d+-\d+-.*?)(?=[a-zA-Z]+\d+-\d+-|$)',
-                prev_text, re.DOTALL
+                prev_text,
+                re.DOTALL
             )
-            for block in prev_blocks:
+
+            for idx, block in enumerate(prev_blocks):
+
                 prev = get_prev(block)
+
                 if not prev:
                     continue
-                status  = get_status(curr, prev, current_text)
-                f_score = similarity_score(curr["father"], prev["father"])
-                record  = {
+
+                # MAP BIO SCORE CORRECTLY
+                current_bio_score = 0.0
+
+                if idx < len(bio_scores):
+                    current_bio_score = bio_scores[idx]
+
+                status = get_status(curr, prev, current_text)
+
+                record = {
                     "Current Name":   curr["name"],
                     "Current Father": curr["father"],
                     "Current DOB":    curr["dob"],
+
                     "Prev Name":      prev["name"],
                     "Prev Father":    prev["father"],
                     "Prev DOB":       prev["dob"],
-                    "Face Score":     prev["score"],
-                    "Cross Score":    prev["cross_score"],
-                    "Father Match":   "SAME" if f_score >= 75 else "DIFFERENT",
+
+                    "Face Score":     round(prev["score"], 2),
+                    "Cross Score":    round(prev["cross_score"], 2),
+
+                    "Bio Score":      round(current_bio_score, 2),
+
                     "Status":         status,
                 }
+
                 record["_key"] = make_record_key(record)
+
                 results.append(record)
 
         if not results:
@@ -325,28 +412,27 @@ def fetch_and_tag(url: str) -> tuple[pd.DataFrame, str | None]:
 
         df = pd.DataFrame(results)
 
-        # ── TAG: NEW vs OLD ───────────────────────────────────────────────────
-        # First refresh → every record is NEW (seen_keys is empty)
-        # Subsequent refreshes → records whose key was seen before = OLD, rest = NEW
+        # NEW / OLD TAGGING
         if st.session_state.refresh_count == 0:
-            # Very first load — everything is NEW
             df["Record Status"] = "🟢 NEW"
         else:
             df["Record Status"] = df["_key"].apply(
-                lambda k: "⚪ OLD" if k in st.session_state.seen_keys else "🟢 NEW"
+                lambda k:
+                    "⚪ OLD"
+                    if k in st.session_state.seen_keys
+                    else "🟢 NEW"
             )
 
-        # Add all current keys to seen set for future refreshes
         st.session_state.seen_keys.update(df["_key"].tolist())
 
-        # Drop internal key column before display
         df = df.drop(columns=["_key"])
+
         df.index += 1
+
         return df, None
 
     except Exception as e:
         return pd.DataFrame(), str(e)
-
 # ════════════════════════════════════════════════════════════════════════════
 # UI
 # ════════════════════════════════════════════════════════════════════════════
@@ -442,7 +528,7 @@ if df is not None and not df.empty:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── FILTERS ───────────────────────────────────────────────────────────────
-    f1, f2, f3, f4 = st.columns([2, 2, 2, 1.5])
+    f1, f2, f3, f4, f5, f6 = st.columns([2,2,2,1.5,1.5,1.5])
 
     with f1:
         status_options  = ["ALL"] + sorted(df["Status"].unique().tolist())
@@ -453,6 +539,23 @@ if df is not None and not df.empty:
 
     with f3:
         selected_record = st.selectbox("RECORD STATUS", ["ALL", "🟢 NEW", "⚪ OLD"])
+    with f5:
+        min_bio = st.number_input(
+            "MIN BIO SCORE",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.0,
+            step=0.01
+    )
+
+    with f6:
+        min_cross = st.number_input(
+            "MIN CROSS SCORE",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.0,
+            step=0.01
+    )
 
     # Apply filters
     filtered = df.copy()
@@ -462,6 +565,8 @@ if df is not None and not df.empty:
         filtered = filtered[filtered["Father Match"] == selected_father]
     if selected_record != "ALL":
         filtered = filtered[filtered["Record Status"] == selected_record]
+    filtered = filtered[filtered["Bio Score"] >= min_bio]
+    filtered = filtered[filtered["Cross Score"] >= min_cross]
 
     with f4:
         st.markdown(
@@ -526,7 +631,7 @@ if df is not None and not df.empty:
         styled = (
             filtered.style
             .apply(style_row, axis=1)
-            .format({"Face Score": "{:.2f}", "Cross Score": "{:.2f}"})
+            .format({"Face Score": "{:.2f}", "Cross Score": "{:.2f}","Bio Score":"{:.2f}"})
             .set_properties(**{
                 "font-family": "IBM Plex Mono, monospace",
                 "font-size":   "12px",
