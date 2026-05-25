@@ -399,6 +399,11 @@ def fetch_and_tag(url: str) -> tuple[pd.DataFrame, str | None]:
                     "Cross Score":    round(prev["cross_score"], 2),
 
                     "Bio Score":      round(current_bio_score, 2),
+                    "Father Match": (
+                        "SAME"
+                        if similarity_score(curr["father"], prev["father"]) >= 75
+                        else "DIFFERENT"
+                    ),
 
                     "Status":         status,
                 }
