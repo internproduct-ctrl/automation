@@ -222,6 +222,7 @@ def get_prev(block):
         return None
 
     first = lines[0]
+
     parts = first.split("-")
 
     if len(parts) < 4:
@@ -243,22 +244,37 @@ def get_prev(block):
     father = ""
     dob = ""
 
-    # Search all lines from bottom
-    for line in reversed(lines):
+    # SEARCH ENTIRE BLOCK FOR DOB
+    dob_match = re.search(r'(\d{4}-\d{2}-\d{2})', block)
 
-        dob_match = re.search(r'(\d{4}-\d{2}-\d{2})', line)
+    if dob_match:
 
-        if dob_match:
-            dob = dob_match.group(1)
+        dob = dob_match.group(1)
 
-            possible_father = clean(
-                line.replace(dob, "")
+        # TAKE TEXT BEFORE DOB
+        before_dob = block[:dob_match.start()]
+
+        # LAST NON-EMPTY LINE BEFORE DOB
+        before_lines = [
+            clean(x.strip())
+            for x in before_dob.split("\n")
+            if x.strip()
+        ]
+
+        if before_lines:
+
+            possible_father = before_lines[-1]
+
+            # REMOVE JUNK
+            possible_father = re.sub(
+            r'(true|false|s1|s2|rei\d+)',
+            '',
+            possible_father,
+            flags=re.IGNORECASE
             ).strip()
 
-            if len(possible_father.split()) >= 2:
+            if len(possible_father.split()) >= 1:
                 father = possible_father
-
-            break
 
     return {
         "name": name,
@@ -267,7 +283,6 @@ def get_prev(block):
         "score": face_score,
         "cross_score": cross_score
     }
-
 def get_status(curr, prev, current_text):
 
     if "duplicate" in current_text.lower():
