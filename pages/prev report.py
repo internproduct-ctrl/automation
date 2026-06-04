@@ -244,37 +244,52 @@ def get_prev(block):
     father = ""
     dob = ""
 
-    # SEARCH ENTIRE BLOCK FOR DOB
-    dob_match = re.search(r'(\d{4}-\d{2}-\d{2})', block)
+# FIND DOB
+    dob_match = re.search(
+    r'(\d{4}-\d{2}-\d{2})',
+    block
+)
 
     if dob_match:
 
         dob = dob_match.group(1)
 
         # TAKE TEXT BEFORE DOB
-        before_dob = block[:dob_match.start()]
+        before_dob = block[:dob_match.start()].strip()
 
-        # LAST NON-EMPTY LINE BEFORE DOB
-        before_lines = [
-            clean(x.strip())
-            for x in before_dob.split("\n")
-            if x.strip()
-        ]
+    else:
 
-        if before_lines:
+        # NO DOB → USE FULL BLOCK
+        before_dob = block.strip()
 
-            possible_father = before_lines[-1]
+    # SPLIT INTO CLEAN LINES
+    before_lines = [
+        x.strip()
+        for x in before_dob.split("\n")
+        if x.strip()
+    ]
 
-            # REMOVE JUNK
-            possible_father = re.sub(
-            r'(true|false|s1|s2|rei\d+)',
+    if before_lines:
+
+        # LAST LINE SHOULD BE FATHER
+        possible_father = before_lines[-1]
+
+        # REMOVE HEADER/METADATA LINE
+        possible_father = re.sub(
+            r'.*True-\d+\.\d+-\d+\.\d+',
             '',
             possible_father,
             flags=re.IGNORECASE
-            ).strip()
+        ).strip()
 
-            if len(possible_father.split()) >= 1:
-                father = possible_father
+        # REMOVE TRAILING SYMBOLS
+        possible_father = re.sub(
+            r'[\|\-]+$',
+            '',
+            possible_father
+        ).strip()
+
+        father = clean(possible_father)
 
     return {
         "name": name,
